@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model SystemSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String @db.Text
+
+  @@index([key])
+}
+
+model Project {
+  id                    String  @id @default(cuid())
+  shortId               String  @unique
+  name                  String
+  description           String?
+  isActive              Boolean @default(true)
+  defaultMode           String  @default("phone")
+  phoneFlow             Json
+  webFlow               Json
+  ttsVoice              String?
+  trainingQuestionCount Int     @default(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  qaItems  QaItem[]
+  leads    Lead[]
+  sessions ConversationSession[]
+
+  @@index([shortId])
+}
+
+model QaItem {
+  id        String @id @default(cuid())
+  projectId String
+  question  String @db.Text
+  answer    String @db.Text
+  sortOrder Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Lead {
+  id          String  @id @default(cuid())
+  projectId   String
+  phoneNumber String?
+  visitorId   String?
+  displayName String?
+  note        String?
+  callStatus  String  @default("PENDING")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  project  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessions ConversationSession[]
+
+  @@index([projectId])
+  @@index([callStatus])
+  @@index([projectId, phoneNumber])
+}
+
+model ConversationSession {
+  id            String    @id @default(cuid())
+  projectId     String
+  leadId        String?
+  mode          String
+  twilioCallSid String?   @unique
+  status        String    @default("in_progress")
+  cursor        Json?
+  startedAt     DateTime  @default(now()) @db.Timestamptz(6)
+  completedAt   DateTime? @db.Timestamptz(6)
+  metadata      Json?
+
+  project Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lead    Lead?              @relation(fields: [leadId], references: [id])
+  turns   ConversationTurn[]
+
+  @@index([projectId, startedAt])
+  @@index([leadId])
+}
+
+model ConversationTurn {
+  id             String   @id @default(cuid())
+  sessionId      String
+  turnNo         Int
+  nodeId         String
+  role           String
+  kind           String
+  transcript     String?  @db.Text
+  editedText     String?  @db.Text
+  dtmf           String?
+  confidence     Float?
+  candidateQaIds String[] @default([])
+  matchedQaId    String?
+  systemText     String?  @db.Text
+  audioUrl       String?
+  metadata       Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  session ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, turnNo])
+}

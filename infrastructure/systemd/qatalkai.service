@@ -1,0 +1,17 @@
+[Unit]
+Description=QATalkAI
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/hirashimallc/57_pj-qatalkai
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=10
+
+Environment=NODE_ENV=production
+Environment=PORT=3028
+
+[Install]
+WantedBy=multi-user.target
