@@ -98,9 +98,75 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* TTS Settings */}
+        {/* OpenAI Settings */}
         <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">音声設定</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">OpenAI設定</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+              <input
+                type="password"
+                value={settings.openai_api_key || ''}
+                onChange={(e) => update('openai_api_key', e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="sk-..."
+              />
+              <p className="text-xs text-gray-400 mt-1">音声認識（Whisper）、回答生成（GPT）、音声合成（TTS）に使用</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">GPTモデル</label>
+              <select
+                value={settings.gpt_model || 'gpt-4o-mini'}
+                onChange={(e) => update('gpt_model', e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="gpt-4o-mini">gpt-4o-mini（高速・低コスト）</option>
+                <option value="gpt-4o">gpt-4o（高精度）</option>
+                <option value="gpt-4-turbo">gpt-4-turbo</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Whisperモデル</label>
+              <select
+                value={settings.whisper_model || 'whisper-1'}
+                onChange={(e) => update('whisper_model', e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="whisper-1">whisper-1</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">TTS モデル</label>
+              <select
+                value={settings.openai_tts_model || 'tts-1'}
+                onChange={(e) => update('openai_tts_model', e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="tts-1">tts-1（標準）</option>
+                <option value="tts-1-hd">tts-1-hd（高品質）</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">TTS 音声</label>
+              <select
+                value={settings.openai_tts_voice || 'alloy'}
+                onChange={(e) => update('openai_tts_voice', e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="alloy">alloy</option>
+                <option value="echo">echo</option>
+                <option value="fable">fable</option>
+                <option value="onyx">onyx</option>
+                <option value="nova">nova</option>
+                <option value="shimmer">shimmer</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* TTS Settings (Twilio) */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">音声設定（Twilio電話用）</h3>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">TTS音声</label>

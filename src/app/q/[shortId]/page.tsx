@@ -39,11 +39,11 @@ type Phase =
   | 'transcribing'
   | 'editing'
   | 'asking'
-  | 'confirmingQ'       // system is reading "～の質問でよろしいですか？"
-  | 'waitingYesNo'      // user must answer yes/no
+  | 'confirmingQ'
+  | 'waitingYesNo'
   | 'recordingYesNo'
   | 'processingYesNo'
-  | 'speakingAnswer'    // system is reading the answer
+  | 'speakingAnswer'
   | 'askingMore'
   | 'waitingMore'
   | 'recordingMore'
@@ -51,7 +51,33 @@ type Phase =
   | 'speakingRephrase'
   | 'speakingThanks'
   | 'finished'
-  | 'answered'          // text mode: show 3 Q&A cards
+  | 'answered'
+
+// Wave Animation Component
+function WaveAnimation({ phase }: { phase: Phase }) {
+  const getWaveClass = () => {
+    if (phase === 'recording' || phase === 'recordingYesNo' || phase === 'recordingMore') {
+      return 'wave-recording'
+    }
+    if (phase === 'transcribing' || phase === 'asking' || phase === 'processingYesNo' || phase === 'processingMore') {
+      return 'wave-processing'
+    }
+    if (phase === 'speakingAnswer' || phase === 'speakingThanks' || phase === 'speakingRephrase' || phase === 'confirmingQ' || phase === 'askingMore') {
+      return 'wave-speaking'
+    }
+    return 'wave-idle'
+  }
+
+  return (
+    <div className={`wave-container ${getWaveClass()}`}>
+      <div className="wave-bar" />
+      <div className="wave-bar" />
+      <div className="wave-bar" />
+      <div className="wave-bar" />
+      <div className="wave-bar" />
+    </div>
+  )
+}
 
 export default function PublicQuestionPage({ params }: { params: Promise<{ shortId: string }> }) {
   const { shortId } = use(params)
@@ -137,7 +163,6 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
     if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
   }, [])
 
-  // Ensure session exists; returns sessionId.
   const ensureSession = useCallback((): Promise<string> => {
     if (sessionId) return Promise.resolve(sessionId)
     if (sessionPromiseRef.current) return sessionPromiseRef.current
@@ -163,7 +188,6 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
   }, [sessionId, shortId])
 
   const processSegments = useCallback(async (segments: Segment[], enableVoice: boolean) => {
-    // If text-only mode and first segment is confirm_q with candidates: show the 3-card list and stop.
     if (!enableVoice) {
       const firstConfirm = segments.find((s) => s.kind === 'prompt' && s.variant === 'confirm_q' && (s.allCandidates?.length ?? 0) > 0) as Segment | undefined
       if (firstConfirm && firstConfirm.allCandidates) {
@@ -171,7 +195,6 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
         setPhase('answered')
         return
       }
-      // Pure directAnswer (say answer) flow in text mode: show as answered with single card.
       const firstAnswer = segments.find((s) => s.kind === 'say' && s.variant === 'answer') as Segment | undefined
       if (firstAnswer) {
         setAllCandidates([{ id: 'direct', question: '', answer: firstAnswer.text || '' }])
@@ -189,7 +212,6 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
         } else if (variant === 'thanks') {
           setPhase('speakingThanks')
         } else if (variant === 'greeting' || variant === 'pitch') {
-          // Not expected in web mode
           setPhase('speakingAnswer')
           setCurrentAnswer({ answer: seg.text })
         } else {
@@ -227,7 +249,6 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
           await new Promise<void>((resolve) => speakText(seg.text!, resolve))
           setPhase('idle')
         } else {
-          // open / reprompt / generic speech prompt → just go to idle so user can re-record
           setPhase('idle')
         }
         return
@@ -298,7 +319,6 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
     setCurrentAnswer(null)
     setAllCandidates([])
     unlockTTS()
-    // Fire off the session start in parallel (no await)
     ensureSession().catch((e) => setError((e as Error).message))
 
     try {
@@ -389,32 +409,38 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
     setEditedText('')
     setError('')
     setYesNoError('')
-    // Keep sessionId so we re-use it; but reset the server-side cursor by starting a new session
     setSessionId(null)
     sessionPromiseRef.current = null
   }
 
+  // Loading and error states
   if (notFound) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white px-4">
         <div className="text-center">
-          <div className="text-6xl mb-4">404</div>
-          <p className="text-gray-600">このプロジェクトは見つかりませんでした。</p>
+          <div className="text-6xl mb-4 text-slate-300">404</div>
+          <p className="text-slate-500">このプロジェクトは見つかりませんでした</p>
         </div>
       </div>
     )
   }
   if (!project) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-500">読み込み中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white">
+        <div className="wave-container wave-processing">
+          <div className="wave-bar" />
+          <div className="wave-bar" />
+          <div className="wave-bar" />
+          <div className="wave-bar" />
+          <div className="wave-bar" />
+        </div>
       </div>
     )
   }
   if (!project.isActive) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="text-gray-600 text-center">このプロジェクトは現在停止中です</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white px-4">
+        <div className="text-slate-500 text-center">このプロジェクトは現在停止中です</div>
       </div>
     )
   }
@@ -423,264 +449,298 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
     ? `Q${candidateIndex + 1} / ${candidateTotal}`
     : null
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white px-4 py-8">
-      <div className="max-w-lg mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">{project.name}</h1>
-          {project.description && <p className="text-sm text-gray-500">{project.description}</p>}
-        </div>
+  // Get status text based on phase
+  const getStatusText = () => {
+    switch (phase) {
+      case 'idle': return askPrompt || 'ボタンをタップして質問してください'
+      case 'recording': return `録音中... ${10 - recordingTime}秒`
+      case 'transcribing': return '音声を認識しています...'
+      case 'asking': return '回答を検索しています...'
+      case 'confirmingQ': return '確認中...'
+      case 'waitingYesNo': return 'お答えください'
+      case 'speakingAnswer': return '回答を読み上げています'
+      case 'speakingThanks': return 'ありがとうございました'
+      case 'finished': return '終了しました'
+      default: return ''
+    }
+  }
 
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex flex-col">
+      {/* Header */}
+      <header className="px-4 py-4 text-center border-b border-slate-100">
+        <h1 className="text-lg font-semibold text-slate-700">{project.name}</h1>
+        {project.description && (
+          <p className="text-xs text-slate-400 mt-1">{project.description}</p>
+        )}
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-6">
+        {/* Error Display */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 text-sm">
-            <p className="font-medium mb-1">エラーが発生しました</p>
-            <p>{error}</p>
+          <div className="w-full max-w-md mb-6 p-4 glass-card rounded-2xl border-red-200 bg-red-50/80">
+            <p className="text-red-600 text-sm font-medium mb-1">エラーが発生しました</p>
+            <p className="text-red-500 text-sm">{error}</p>
             {error.includes('マイク') && (
-              <div className="mt-3 p-3 bg-white rounded-lg text-xs text-gray-600">
-                <p className="font-medium text-gray-700 mb-1">マイクの許可方法:</p>
-                <p><b>iPhone (Safari):</b> アドレスバー左の「ぁあ」→「Webサイトの設定」→マイクを「許可」</p>
-                <p className="mt-1"><b>Android (Chrome):</b> アドレスバー左の鍵アイコン→「権限」→マイクを「許可」</p>
+              <div className="mt-3 p-3 bg-white/80 rounded-xl text-xs text-slate-600">
+                <p className="font-medium text-slate-700 mb-1">マイクの許可方法:</p>
+                <p><b>iPhone:</b> アドレスバー左の「ぁあ」→「Webサイトの設定」→マイクを「許可」</p>
+                <p className="mt-1"><b>Android:</b> アドレスバー左の鍵アイコン→「権限」→マイクを「許可」</p>
               </div>
             )}
           </div>
         )}
 
-        {phase === 'idle' && (
-          <div className="text-center">
-            <button
-              onClick={startRecording}
-              className="w-48 h-48 rounded-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col items-center justify-center mx-auto"
-            >
-              <svg className="w-16 h-16 mb-2" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-              </svg>
-              <span className="text-lg font-medium">{project.name}<br />について質問する</span>
-            </button>
-            <p className="text-sm text-gray-500 mt-4">
-              {askPrompt || 'ボタンを押して話しかけてください（最大10秒）'}
-            </p>
+        {/* Wave Animation */}
+        <div className="mb-6">
+          <WaveAnimation phase={phase} />
+        </div>
+
+        {/* Status Text */}
+        <p className="text-sm text-slate-500 mb-6 text-center">{getStatusText()}</p>
+
+        {/* User's Question Display */}
+        {(transcribedText || editedText) && phase !== 'editing' && phase !== 'idle' && (
+          <div className="w-full max-w-md mb-4 px-4 py-3 bg-blue-50 rounded-xl text-right">
+            <p className="text-sm text-slate-700">{editedText || transcribedText}</p>
           </div>
         )}
 
-        {phase === 'recording' && (
-          <div className="text-center">
-            <div className="relative w-48 h-48 mx-auto mb-6">
-              <svg className="w-48 h-48 -rotate-90" viewBox="0 0 192 192">
-                <circle cx="96" cy="96" r="88" fill="none" stroke="#e5e7eb" strokeWidth="6" />
-                <circle
-                  cx="96" cy="96" r="88" fill="none" stroke="#ef4444" strokeWidth="6"
-                  strokeDasharray={2 * Math.PI * 88}
-                  strokeDashoffset={2 * Math.PI * 88 * (1 - recordingTime / 10)}
-                  strokeLinecap="round"
-                  className="transition-all duration-1000"
-                />
-              </svg>
-              <button onClick={stopRecording} className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="w-6 h-6 bg-red-500 rounded-sm animate-pulse mb-2" />
-                <span className="text-2xl font-bold text-red-600">{10 - recordingTime}秒</span>
-                <span className="text-sm text-gray-500 mt-1">タップで停止</span>
-              </button>
-            </div>
-            <p className="text-red-600 font-medium animate-pulse">録音中...</p>
+        {/* AI Response Card */}
+        {currentAnswer && ['speakingAnswer', 'speakingThanks', 'finished'].includes(phase) && (
+          <div className="w-full max-w-md mb-6 glass-card rounded-2xl p-5">
+            {currentAnswer.question && (
+              <p className="text-sm text-blue-500 font-medium mb-2">{currentAnswer.question}</p>
+            )}
+            <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{currentAnswer.answer}</p>
           </div>
         )}
 
-        {(phase === 'transcribing' || phase === 'asking') && (
-          <div className="text-center py-12">
-            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">{phase === 'transcribing' ? '音声を文字に変換しています...' : '回答を検索しています...'}</p>
-          </div>
-        )}
-
+        {/* Editing Mode */}
         {phase === 'editing' && (
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">音声変換結果</h3>
+          <div className="w-full max-w-md glass-card rounded-2xl p-5">
+            <h3 className="text-sm font-medium text-slate-500 mb-2">音声認識結果</h3>
             <textarea
               value={editedText}
               onChange={(e) => setEditedText(e.target.value)}
-              className="w-full px-4 py-3 border rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none resize-none bg-white/50"
               rows={3}
             />
-            <p className="text-xs text-gray-400 mt-1 mb-4">必要に応じて修正してから送信してください</p>
+            <p className="text-xs text-slate-400 mt-2 mb-4">必要に応じて修正してから送信してください</p>
             <div className="flex gap-3">
-              <button onClick={handleSubmitEdited} disabled={!editedText.trim()} className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 font-medium transition-colors">この内容で質問する</button>
-              <button onClick={resetToIdle} className="px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">やり直す</button>
+              <button
+                onClick={handleSubmitEdited}
+                disabled={!editedText.trim()}
+                className="flex-1 py-3 btn-primary text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                この内容で質問する
+              </button>
+              <button
+                onClick={resetToIdle}
+                className="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                やり直す
+              </button>
             </div>
           </div>
         )}
 
-        {phase === 'confirmingQ' && currentPrompt && (
-          <div className="text-center py-8">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-              <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
-              </svg>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-4">
-              {countBadge && <p className="text-sm text-gray-400 mb-2">{countBadge}</p>}
-              {relatedQa && <p className="text-lg font-medium text-gray-800">{relatedQa}</p>}
-              <p className="text-blue-600 mt-3">に関してでよろしいですか？</p>
-            </div>
-            <p className="text-sm text-gray-400 animate-pulse">読み上げ中...</p>
-          </div>
-        )}
-
-        {phase === 'waitingYesNo' && currentPrompt && (
-          <div className="text-center py-6">
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              {countBadge && <p className="text-sm text-gray-400 mb-2">{countBadge}</p>}
+        {/* Yes/No Confirmation for Question */}
+        {(phase === 'confirmingQ' || phase === 'waitingYesNo') && currentPrompt && (
+          <div className="w-full max-w-md">
+            <div className="glass-card rounded-2xl p-5 mb-4">
+              {countBadge && (
+                <span className="inline-block bg-blue-100 text-blue-600 text-xs font-medium px-2 py-1 rounded-full mb-2">
+                  {countBadge}
+                </span>
+              )}
               {relatedQa ? (
                 <>
-                  <p className="text-lg font-medium text-gray-800">{relatedQa}</p>
-                  <p className="text-blue-600 mt-2">に関してでよろしいですか？</p>
+                  <p className="text-lg font-medium text-slate-800">{relatedQa}</p>
+                  <p className="text-blue-500 mt-2">についてでよろしいですか？</p>
                 </>
               ) : (
-                <p className="text-lg font-medium text-gray-800">{currentPrompt.text}</p>
+                <p className="text-lg font-medium text-slate-800">{currentPrompt.text}</p>
               )}
             </div>
-            {yesNoError && <div className="bg-yellow-50 text-yellow-700 rounded-lg p-3 mb-4 text-sm">{yesNoError}</div>}
-            <div className="flex gap-3 justify-center mb-4">
-              <button onClick={() => answerYes('yesno')} className="flex-1 max-w-[140px] py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-lg transition-colors shadow-md">はい</button>
-              <button onClick={() => answerNo('yesno')} className="flex-1 max-w-[140px] py-4 bg-red-400 hover:bg-red-500 text-white rounded-xl font-bold text-lg transition-colors shadow-md">いいえ</button>
-            </div>
-            {project.enableVoiceConversation && (
+            {phase === 'waitingYesNo' && (
               <>
-                <button onClick={() => startYesNoRecording('recordingYesNo')} className="w-16 h-16 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg mx-auto flex items-center justify-center transition-colors">
-                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                  </svg>
-                </button>
-                <p className="text-xs text-gray-400 mt-2">声で答えることもできます</p>
+                {yesNoError && (
+                  <div className="bg-amber-50 text-amber-700 rounded-xl p-3 mb-4 text-sm">{yesNoError}</div>
+                )}
+                <div className="flex gap-3 mb-4">
+                  <button
+                    onClick={() => answerYes('yesno')}
+                    className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    はい
+                  </button>
+                  <button
+                    onClick={() => answerNo('yesno')}
+                    className="flex-1 py-4 bg-rose-400 hover:bg-rose-500 text-white rounded-2xl font-bold text-lg transition-all shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    いいえ
+                  </button>
+                </div>
+                {project.enableVoiceConversation && (
+                  <div className="text-center">
+                    <button
+                      onClick={() => startYesNoRecording('recordingYesNo')}
+                      className="w-14 h-14 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 shadow-md mx-auto flex items-center justify-center transition-colors"
+                    >
+                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                      </svg>
+                    </button>
+                    <p className="text-xs text-slate-400 mt-2">声で答えることもできます</p>
+                  </div>
+                )}
               </>
             )}
           </div>
         )}
 
+        {/* Recording Yes/No */}
         {(phase === 'recordingYesNo' || phase === 'recordingMore') && (
-          <div className="text-center py-8">
-            <div className="relative w-32 h-32 mx-auto mb-6">
-              <svg className="w-32 h-32 -rotate-90" viewBox="0 0 128 128">
-                <circle cx="64" cy="64" r="56" fill="none" stroke="#e5e7eb" strokeWidth="6" />
+          <div className="text-center">
+            <div className="relative w-28 h-28 mx-auto mb-4">
+              <svg className="w-28 h-28 -rotate-90" viewBox="0 0 112 112">
+                <circle cx="56" cy="56" r="50" fill="none" stroke="#e2e8f0" strokeWidth="6" />
                 <circle
-                  cx="64" cy="64" r="56" fill="none" stroke="#ef4444" strokeWidth="6"
-                  strokeDasharray={2 * Math.PI * 56}
-                  strokeDashoffset={2 * Math.PI * 56 * (1 - recordingTime / 5)}
+                  cx="56" cy="56" r="50" fill="none" stroke="#ef4444" strokeWidth="6"
+                  strokeDasharray={2 * Math.PI * 50}
+                  strokeDashoffset={2 * Math.PI * 50 * (1 - recordingTime / 5)}
                   strokeLinecap="round"
                   className="transition-all duration-1000"
                 />
               </svg>
-              <button onClick={stopRecording} className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="w-5 h-5 bg-red-500 rounded-sm animate-pulse mb-1" />
-                <span className="text-xl font-bold text-red-600">{5 - recordingTime}秒</span>
+              <button
+                onClick={stopRecording}
+                className="absolute inset-0 flex flex-col items-center justify-center"
+              >
+                <div className="w-5 h-5 bg-red-500 rounded-sm btn-recording mb-1" />
+                <span className="text-lg font-bold text-red-600">{5 - recordingTime}秒</span>
               </button>
             </div>
-            <p className="text-red-600 font-medium animate-pulse">「はい」または「いいえ」とお答えください</p>
+            <p className="text-red-500 text-sm font-medium">「はい」または「いいえ」</p>
           </div>
         )}
 
+        {/* Processing Yes/No */}
         {(phase === 'processingYesNo' || phase === 'processingMore') && (
-          <div className="text-center py-12">
-            <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">聞き取り中...</p>
+          <div className="text-center">
+            <p className="text-slate-500 text-sm">聞き取り中...</p>
           </div>
         )}
 
-        {phase === 'speakingAnswer' && currentAnswer && (
-          <div className="py-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center animate-pulse">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
-                </svg>
-              </div>
-              <p className="text-sm text-gray-400">回答を読み上げています...</p>
+        {/* Ask More */}
+        {(phase === 'askingMore' || phase === 'waitingMore') && currentPrompt && (
+          <div className="w-full max-w-md">
+            <div className="glass-card rounded-2xl p-5 mb-4 text-center">
+              <p className="text-lg text-slate-700 font-medium">{currentPrompt.text || 'ほかにご質問はありますか？'}</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              {currentAnswer.question && <p className="text-sm text-blue-500 font-medium mb-2">{currentAnswer.question}</p>}
-              <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{currentAnswer.answer}</p>
-            </div>
-          </div>
-        )}
-
-        {phase === 'askingMore' && (
-          <div className="text-center py-8">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-              <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
-              </svg>
-            </div>
-            <p className="text-lg text-gray-700 font-medium">{currentPrompt?.text || 'ほかにご質問はありますか？'}</p>
-            <p className="text-sm text-gray-400 mt-2 animate-pulse">読み上げ中...</p>
-          </div>
-        )}
-
-        {phase === 'waitingMore' && currentPrompt && (
-          <div className="text-center py-6">
-            <p className="text-lg text-gray-700 font-medium mb-6">{currentPrompt.text}</p>
-            {yesNoError && <div className="bg-yellow-50 text-yellow-700 rounded-lg p-3 mb-4 text-sm">{yesNoError}</div>}
-            <div className="flex gap-3 justify-center mb-4">
-              <button onClick={() => answerYes('more')} className="flex-1 max-w-[140px] py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-lg transition-colors shadow-md">はい</button>
-              <button onClick={() => answerNo('more')} className="flex-1 max-w-[140px] py-4 bg-red-400 hover:bg-red-500 text-white rounded-xl font-bold text-lg transition-colors shadow-md">いいえ</button>
-            </div>
-            {project.enableVoiceConversation && (
+            {phase === 'waitingMore' && (
               <>
-                <button onClick={() => startYesNoRecording('recordingMore')} className="w-16 h-16 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg mx-auto flex items-center justify-center transition-colors">
-                  <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                  </svg>
-                </button>
-                <p className="text-xs text-gray-400 mt-2">声で答えることもできます</p>
+                {yesNoError && (
+                  <div className="bg-amber-50 text-amber-700 rounded-xl p-3 mb-4 text-sm">{yesNoError}</div>
+                )}
+                <div className="flex gap-3 mb-4">
+                  <button
+                    onClick={() => answerYes('more')}
+                    className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-lg transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    はい
+                  </button>
+                  <button
+                    onClick={() => answerNo('more')}
+                    className="flex-1 py-4 bg-rose-400 hover:bg-rose-500 text-white rounded-2xl font-bold text-lg transition-all shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    いいえ
+                  </button>
+                </div>
+                {project.enableVoiceConversation && (
+                  <div className="text-center">
+                    <button
+                      onClick={() => startYesNoRecording('recordingMore')}
+                      className="w-14 h-14 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 shadow-md mx-auto flex items-center justify-center transition-colors"
+                    >
+                      <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                      </svg>
+                    </button>
+                    <p className="text-xs text-slate-400 mt-2">声で答えることもできます</p>
+                  </div>
+                )}
               </>
             )}
           </div>
         )}
 
+        {/* Rephrase */}
         {phase === 'speakingRephrase' && (
-          <div className="text-center py-12">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-              <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
-              </svg>
-            </div>
-            <p className="text-lg text-gray-700 font-medium">改めてご質問をお願いします</p>
+          <div className="glass-card rounded-2xl p-5 max-w-md text-center">
+            <p className="text-slate-700 font-medium">改めてご質問をお願いします</p>
           </div>
         )}
 
-        {(phase === 'speakingThanks' || phase === 'finished') && (
-          <div className="text-center py-12">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-              <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707A1 1 0 0112 5v14a1 1 0 01-1.707.707L5.586 15z" />
+        {/* Thanks / Finished */}
+        {(phase === 'speakingThanks' || phase === 'finished') && !currentAnswer && (
+          <div className="text-center">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-lg text-gray-700 font-medium">ご利用ありがとうございました</p>
+            <p className="text-lg text-slate-700 font-medium">ご利用ありがとうございました</p>
             {phase === 'finished' && (
-              <button onClick={resetToIdle} className="mt-6 px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium">別の質問をする</button>
+              <button
+                onClick={resetToIdle}
+                className="mt-6 px-6 py-3 btn-primary text-white rounded-xl font-medium"
+              >
+                別の質問をする
+              </button>
             )}
           </div>
         )}
 
+        {/* Text Mode - Answered with Cards */}
         {phase === 'answered' && (
-          <div>
+          <div className="w-full max-w-md">
             {transcribedText && (
-              <div className="bg-blue-50 rounded-xl p-4 mb-4">
-                <p className="text-xs text-blue-500 mb-1">あなたの質問</p>
-                <p className="text-gray-800">{editedText || transcribedText}</p>
+              <div className="mb-4 px-4 py-3 bg-blue-50 rounded-xl text-right">
+                <p className="text-xs text-blue-400 mb-1">あなたの質問</p>
+                <p className="text-sm text-slate-700">{editedText || transcribedText}</p>
               </div>
             )}
             {allCandidates.length > 0 && (
               <div className="space-y-3">
-                <p className="text-xs text-gray-400">関連するQ&A（{allCandidates.length}件）</p>
+                <p className="text-xs text-slate-400">関連するQ&A（{allCandidates.length}件）</p>
                 {allCandidates.map((qa, i) => (
-                  <div key={qa.id} className="bg-white rounded-xl shadow-sm p-5">
+                  <div key={qa.id} className="glass-card rounded-2xl p-5">
                     <div className="flex items-start gap-3">
-                      <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full mt-0.5">Q{i + 1}</span>
-                      <div className="flex-1">
-                        {qa.question && <p className="font-medium text-gray-800">{qa.question}</p>}
-                        <p className="text-gray-600 text-sm mt-2 whitespace-pre-wrap leading-relaxed">{qa.answer}</p>
+                      <span className="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-1 rounded-full shrink-0">
+                        Q{i + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        {qa.question && (
+                          <p className="font-medium text-slate-800 mb-2">{qa.question}</p>
+                        )}
+                        <p className="text-slate-600 text-sm whitespace-pre-wrap leading-relaxed">{qa.answer}</p>
                       </div>
                     </div>
                   </div>
@@ -688,20 +748,60 @@ export default function PublicQuestionPage({ params }: { params: Promise<{ short
               </div>
             )}
             {allCandidates.length === 0 && (
-              <div className="bg-white rounded-xl shadow-sm p-6 text-center text-gray-500">
-                関連するQ&Aが見つかりませんでした。
+              <div className="glass-card rounded-2xl p-6 text-center text-slate-500">
+                関連するQ&Aが見つかりませんでした
               </div>
             )}
-            <button onClick={resetToIdle} className="w-full mt-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors">別の質問をする</button>
+            <button
+              onClick={resetToIdle}
+              className="w-full mt-6 py-3 btn-primary text-white rounded-xl font-medium"
+            >
+              別の質問をする
+            </button>
           </div>
         )}
+      </main>
 
-        {['confirmingQ', 'waitingYesNo', 'speakingAnswer', 'askingMore', 'waitingMore'].includes(phase) && (
-          <button onClick={resetToIdle} className="w-full mt-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+      {/* Footer - Main Recording Button */}
+      {phase === 'idle' && (
+        <footer className="p-4 pb-8">
+          <button
+            onClick={startRecording}
+            className="w-full max-w-md mx-auto flex items-center justify-center gap-3 py-4 px-6 btn-primary text-white rounded-2xl font-medium text-lg shadow-xl shadow-blue-200"
+          >
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+            </svg>
+            質問する
+          </button>
+        </footer>
+      )}
+
+      {/* Recording State - Stop Button */}
+      {phase === 'recording' && (
+        <footer className="p-4 pb-8">
+          <button
+            onClick={stopRecording}
+            className="w-full max-w-md mx-auto flex items-center justify-center gap-3 py-4 px-6 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-medium text-lg shadow-xl shadow-red-200 btn-recording"
+          >
+            <div className="w-5 h-5 bg-white rounded-sm" />
+            録音を停止（残り {10 - recordingTime}秒）
+          </button>
+        </footer>
+      )}
+
+      {/* Reset Button for intermediate states */}
+      {['confirmingQ', 'waitingYesNo', 'speakingAnswer', 'askingMore', 'waitingMore'].includes(phase) && (
+        <footer className="p-4 text-center">
+          <button
+            onClick={resetToIdle}
+            className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+          >
             最初からやり直す
           </button>
-        )}
-      </div>
+        </footer>
+      )}
     </div>
   )
 }

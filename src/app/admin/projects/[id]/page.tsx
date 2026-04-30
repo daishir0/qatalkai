@@ -41,15 +41,51 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [project, setProject] = useState<Project | null>(null)
   const [tab, setTab] = useState<TabKey>('flow')
   const [loading, setLoading] = useState(true)
+  const [shortId, setShortId] = useState('')
+  const [shortIdEditing, setShortIdEditing] = useState(false)
+  const [shortIdSaving, setShortIdSaving] = useState(false)
+  const [shortIdError, setShortIdError] = useState<string | null>(null)
 
   const reload = async () => {
     setLoading(true)
     const res = await fetch(`/api/admin/projects/${id}`)
-    if (res.ok) setProject(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      setProject(data)
+      setShortId(data.shortId)
+    }
     setLoading(false)
   }
 
   useEffect(() => { reload() }, [id])
+
+  const saveShortId = async () => {
+    if (!project || shortId === project.shortId) {
+      setShortIdEditing(false)
+      return
+    }
+    setShortIdSaving(true)
+    setShortIdError(null)
+    const res = await fetch(`/api/admin/projects/${project.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shortId }),
+    })
+    if (res.ok) {
+      setShortIdEditing(false)
+      reload()
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setShortIdError(data.error || '保存に失敗しました')
+    }
+    setShortIdSaving(false)
+  }
+
+  const cancelShortIdEdit = () => {
+    setShortId(project?.shortId || '')
+    setShortIdEditing(false)
+    setShortIdError(null)
+  }
 
   if (loading || !project) return <div className="text-gray-500">読み込み中...</div>
 
@@ -58,9 +94,52 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       <div className="flex items-center gap-3 mb-4">
         <Link href="/admin/projects" className="text-sm text-blue-600 hover:underline">← 一覧</Link>
         <h1 className="text-2xl font-bold">{project.name}</h1>
-        <span className="text-xs bg-gray-100 rounded px-2 py-0.5">{project.shortId}</span>
+        {shortIdEditing ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={shortId}
+              onChange={(e) => setShortId(e.target.value)}
+              className="text-xs border rounded px-2 py-1 w-32"
+              placeholder="例: mitsu-web"
+              disabled={shortIdSaving}
+            />
+            <button
+              onClick={saveShortId}
+              disabled={shortIdSaving}
+              className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {shortIdSaving ? '保存中...' : '保存'}
+            </button>
+            <button
+              onClick={cancelShortIdEdit}
+              disabled={shortIdSaving}
+              className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800"
+            >
+              キャンセル
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShortIdEditing(true)}
+            className="text-xs bg-gray-100 rounded px-2 py-0.5 hover:bg-gray-200 cursor-pointer"
+            title="クリックして編集"
+          >
+            {project.shortId} ✏️
+          </button>
+        )}
         <span className="text-xs bg-indigo-100 text-indigo-700 rounded px-2 py-0.5">主用途: {project.defaultMode}</span>
       </div>
+      {shortIdError && (
+        <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+          {shortIdError}
+        </div>
+      )}
+      {shortIdEditing && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          ⚠️ shortIdを変更すると、既存のQRコード・共有URLが無効になります。英数字とハイフンのみ、3〜20文字。
+        </div>
+      )}
 
       <div className="flex gap-1 border-b mb-6">
         {(['flow', 'qa', 'leads', 'run', 'sessions'] as TabKey[]).map((k) => (

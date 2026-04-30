@@ -46,6 +46,34 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       data.webFlow = parsed as unknown as Prisma.InputJsonValue
     }
 
+    // shortId 更新
+    if (body.shortId !== undefined) {
+      // フォーマット検証: 英数字とハイフンのみ、3-20文字
+      const shortIdRegex = /^[a-zA-Z0-9-]{3,20}$/
+      if (!shortIdRegex.test(body.shortId)) {
+        return NextResponse.json(
+          { error: 'shortIdは英数字とハイフンのみ、3〜20文字で指定してください' },
+          { status: 400 }
+        )
+      }
+
+      // ユニーク検証: 他のプロジェクトで使用されていないか
+      const existing = await prisma.project.findFirst({
+        where: {
+          shortId: body.shortId,
+          NOT: { id }
+        }
+      })
+      if (existing) {
+        return NextResponse.json(
+          { error: 'このshortIdは既に使用されています' },
+          { status: 400 }
+        )
+      }
+
+      data.shortId = body.shortId
+    }
+
     const project = await prisma.project.update({ where: { id }, data })
     return NextResponse.json(project)
   } catch (e) {
